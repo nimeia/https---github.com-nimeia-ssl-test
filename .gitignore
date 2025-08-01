@@ -1,0 +1,35 @@
+# Maven target directory
+/target/
+
+# Eclipse files
+*.classpath
+*.project
+*.settings/
+
+# IntelliJ IDEA files
+*.iml
+.idea/
+out/
+
+# VS Code files
+.vscode/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Spring Boot specific
+*.jar
+*.war
+
+# Dependency directories
+/node_modules/
+npm-debug.log*
+
+# Build output
+/build/
+
+

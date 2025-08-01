@@ -1,0 +1,34 @@
+server:
+  port: 8080
+  ssl:
+    key-store: classpath:certs/truststore.p12
+    key-store-password: changeit
+    key-store-type: PKCS12
+    key-alias: gateway-service
+    
+spring:
+  application:
+    name: gateway-service
+
+  cloud:
+    gateway:
+      routes:
+        - id: user-service
+          uri: https://user-service.demoapi.io:8081
+          predicates:
+            - Path=/user/**
+        - id: order-service
+          uri: https://order-service.demoapi.io:8083
+          predicates:
+            - Path=/order/**
+        - id: product-service
+          uri: https://product-service.demoapi.io:8082
+          predicates:
+            - Path=/product/**
+    discovery:
+      enabled: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: https://eureka-server.demoapi.io:8761/eureka/

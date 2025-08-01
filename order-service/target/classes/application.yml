@@ -1,0 +1,15 @@
+server:
+  port: 8083
+  ssl:
+    key-store: classpath:certs/order-service.p12
+    key-store-password: changeit
+    key-store-type: PKCS12
+    key-alias: order-service
+spring:
+  application:
+    name: order-service
+
+eureka:
+  client:
+    service-url:
+      defaultZone: https://eureka-server.demoapi.io:8761/eureka/

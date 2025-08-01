@@ -1,0 +1,15 @@
+server:
+  port: 8081
+  ssl:
+    key-store: classpath:certs/user-service.p12
+    key-store-password: changeit
+    key-store-type: PKCS12
+    key-alias: user-service
+spring:
+  application:
+    name: user-service
+
+eureka:
+  client:
+    service-url:
+      defaultZone: https://eureka-server.demoapi.io:8761/eureka/
