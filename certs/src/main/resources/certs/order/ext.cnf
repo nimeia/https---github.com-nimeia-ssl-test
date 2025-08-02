@@ -1,0 +1,5 @@
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName = DNS:order.svc.local,IP:127.0.0.1,DNS:localhost,DNS:*.demoapi.io,IP:192.168.10.116

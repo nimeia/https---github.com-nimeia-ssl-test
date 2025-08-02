@@ -1,67 +1,84 @@
-$ErrorActionPreference = "Stop"
+param(
+    [string]$Domain = "svc.local",
+    [string]$Org = "MyOrg",
+    [string]$Country = "CN",
+    [string]$OutputPath = "..\src\main\resources\certs",
+    [string[]]$Services = @("eureka", "gateway", "user", "product", "order"),
+    [string[]]$SanList = @("127.0.0.1", "localhost", "*.demoapi.io","192.168.10.116")
+)
 
-# ========= ? 全局配置 =========
-$domain = ""           # 服务后缀域名
-$outputDir = "../src/main/resources/certs"                  # 证书输出目录
-$trustStorePass = "changeit"
-$validityDays = 3650
-$services = @("eureka-server", "user-service", "product-service", "order-service", "gateway-service")
+$caKey = "$OutputPath\ca.key"
+$caCert = "$OutputPath\ca.crt"
 
-# ========= ? 清理 & 创建输出目录 =========
-if (Test-Path $outputDir) {
-    Remove-Item -Recurse -Force "$outputDir/*"
-} else {
-    New-Item -ItemType Directory -Path $outputDir | Out-Null
+# 创建输出目录
+New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
+
+# 生成 CA 私钥和自签名证书
+if (!(Test-Path $caKey)) {
+    Write-Host "? 生成 Root CA..."
+    openssl genrsa -out $caKey 2048
+    openssl req -x509 -new -nodes -key $caKey -sha256 -days 3650 -out $caCert -subj "/CN=MyCA/O=$Org/C=$Country"
 }
 
-# ========= ? Step 1: 创建私有 CA =========
-$caKey = Join-Path $outputDir "ca.key"
-$caCert = Join-Path $outputDir "ca.crt"
+foreach ($service in $Services) {
+    $fqdn = "$service.$Domain"
+    $certPath = "$OutputPath\$service"
+    New-Item -ItemType Directory -Path $certPath -Force | Out-Null
 
-Write-Output "? Step 1: 生成私有 CA"
+    $keyFile = "$certPath\key.pem"
+    $csrFile = "$certPath\csr.pem"
+    $crtFile = "$certPath\cert.pem"
+    $p12File = "$certPath\keystore.p12"
+    $truststoreFile = "$certPath\truststore.p12"
+    $extFile = "$certPath\ext.cnf"
 
-openssl genrsa -out $caKey 4096
-openssl req -x509 -new -nodes -key $caKey -sha256 -days $validityDays -out $caCert -subj "/CN=MyRootCA/O=MyCompany/C=US"
+    # 写入 ext.cnf
+    $allSans = @("DNS:$fqdn") + ($SanList | ForEach-Object {
+        if ($_ -match '^\d{1,3}(\.\d{1,3}){3}$') { "IP:$_" } else { "DNS:$_" }
+    })
+    $sanString = [string]::Join(",", $allSans)
 
-# ========= ? Step 2: 生成服务 keystore =========
-foreach ($service in $services) {
-    $fullCN = "$service$domain"
-    $alias = $service
+@"
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName = $sanString
+"@ | Out-File -Encoding ascii $extFile
 
-    $key     = Join-Path $outputDir "$service.key"
-    $csr     = Join-Path $outputDir "$service.csr"
-    $crt     = Join-Path $outputDir "$service.crt"
-    $p12     = Join-Path $outputDir "$service-keystore.p12"
-    $keystorePass = "changeit"
+    Write-Host "`n? 为服务 $service 生成证书..."
 
-    Write-Output "? 正在处理服务: $service"
+    openssl genrsa -out $keyFile 2048
+    openssl req -new -key $keyFile -out $csrFile -subj "/CN=$fqdn/O=$Org/C=$Country"
+    openssl x509 -req -in $csrFile -CA $caCert -CAkey $caKey -CAcreateserial -out $crtFile -days 825 -sha256 -extfile $extFile
 
-    # 生成私钥和 CSR
-    openssl genrsa -out $key 2048
-    openssl req -new -key $key -out $csr -subj "/CN=$fullCN/O=MyCompany/C=US"
+    # 打包 keystore
+    Write-Host "? 打包 keystore (PKCS12)..."
+    openssl pkcs12 -export -in $crtFile -inkey $keyFile -out $p12File -name "$service-cert" -CAfile $caCert -caname root -passout pass:changeit
 
-    # 使用 CA 签名
-    openssl x509 -req -in $csr -CA $caCert -CAkey $caKey -CAcreateserial -out $crt -days $validityDays -sha256
+    # 构造 truststore：导入 CA 和所有服务 cert
+    $truststorePem = "$certPath\truststore.pem"
+    $truststoreCombined = @($caCert)
 
-    # 打包为 keystore
-    openssl pkcs12 -export -in $crt -inkey $key -certfile $caCert -out $p12 -name $alias -passout pass:$keystorePass
+    foreach ($s in $Services) {
+        $sCert = "$OutputPath\$s\cert.pem"
+        if (Test-Path $sCert) {
+            $truststoreCombined += $sCert
+        }
+    }
+
+    # 清空 truststorePem
+    Set-Content -Path $truststorePem -Value "" -Encoding ascii
+
+    # 逐个追加所有 PEM 文件内容
+    foreach ($pemPath in $truststoreCombined) {
+        Get-Content -Path $pemPath -Encoding ascii | Add-Content -Path $truststorePem -Encoding ascii
+    }
+
+    #openssl pkcs12 -export -out $truststoreFile -in $caCert -inkey $keyFile -certfile $truststorePem -name "$service-trust" -passout pass:changeit
+    openssl pkcs12 -export -out $truststoreFile -in $crtFile -inkey $keyFile  -certfile $truststorePem -name "$service-trust" -passout pass:changeit
+
+    #openssl pkcs12 -export  -out "$certPath\truststore.p12" -in "$certPath\truststore.pem" -name "$service-trust" -passout pass:changeit
 }
 
-# ========= ? Step 3: 构建统一 truststore =========
-$trustStore = Join-Path $outputDir "truststore.p12"
-Write-Output "? Step 3: 创建统一 truststore"
-
-foreach ($service in $services) {
-    $crt = Join-Path $outputDir "$service.crt"
-    $alias = $service
-
-    keytool -import -trustcacerts -alias $alias -file $crt `
-        -keystore $trustStore -storepass $trustStorePass -storetype PKCS12 -noprompt
-}
-
-# ========= ? 完成 =========
-Write-Output ""
-Write-Output "? 所有证书已成功生成并输出到: '$outputDir'"
-Write-Output " - 每个服务: <service>-keystore.p12"
-Write-Output " - 统一 Truststore: truststore.p12"
-Write-Output " - CA 证书: ca.crt"
+Write-Host "`n? 所有服务证书生成完毕，路径：$OutputPath"
