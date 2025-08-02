@@ -1,76 +1,43 @@
-# ================================
-# 参数配置
-# ================================
-$Services = @("eureka-server", "gateway-service", "user-service", "product-service", "order-service")
-$Domain = "demoapi.io"
-$TruststorePassword = "changeit"
-$KeystorePassword = "changeit"
-$DaysValid = 3650
-$OutputDir = "../src/main/resources/certs"
+# -------------------------------
+# 参数设置
+# -------------------------------
+$CAName = "my-root-ca"
+$Password = "changeit"
+$CAKey = "$CAName.key"
+$CACert = "$CAName.crt"
+$CADays = 3650
+$Services = @("eureka-server", "gateway", "user-service", "product-service", "order-service")
+$CertsDir = "certs"
+New-Item -ItemType Directory -Force -Path $CertsDir | Out-Null
 
-# ================================
-# 初始化目录
-# ================================
-if (-Not (Test-Path $OutputDir)) {
-    New-Item -ItemType Directory -Path $OutputDir | Out-Null
+# -------------------------------
+# 1. 创建自签名 CA（只创建一次）
+# -------------------------------
+if (-not (Test-Path "$CertsDir/$CAKey")) {
+    Write-Host "? 生成自签名 CA: $CAName"
+    openssl req -x509 -newkey rsa:2048 -days $CADays -nodes `
+        -keyout "$CertsDir/$CAKey" -out "$CertsDir/$CACert" `
+        -subj "/CN=MyCustomCA/O=DemoCA"
 }
-Set-Location $OutputDir
 
-# ================================
-# 生成 CA 根证书
-# ================================
-Write-Host "? 生成 CA..."
-openssl genrsa -out ca.key 4096
-openssl req -x509 -new -key ca.key -sha256 -days $DaysValid -out ca.crt -subj "/CN=$Domain CA/O=$Domain/C=CN"
-Write-Host "? CA 证书已生成"
-
-# ================================
-# 为每个服务生成私钥、证书
-# ================================
+# -------------------------------
+# 2. 为每个服务生成证书、keystore、truststore
+# -------------------------------
 foreach ($service in $Services) {
-    $Fqdn = "$service"+"."+"$Domain"
-    Write-Host "? 正在生成证书: $Fqdn"
+    Write-Host "? 正在处理服务: $service"
+    $key = $service+".key"
+    $csr = $service+".csr"
+    $crt = $service+".crt"
+    $p12 = $service+"-keystore.p12"
+    $trust = $service+"-truststore.p12"
+    $alias = $service
+    $fqdn = $service+".demoapi.io"
 
-    openssl genrsa -out "$service.key" 2048
-    openssl req -new -key "$service.key" -out "$service.csr" -subj "/CN=$Fqdn/O=$Domain/C=CN"
-    openssl x509 -req -in "$service.csr" -CA ca.crt -CAkey ca.key -CAcreateserial -out "$service.crt" -days $DaysValid -sha256
-    Remove-Item "$service.csr"
-}
+    # Step 1: 创建私钥
+    openssl genrsa -out "$CertsDir/$key" 2048
 
-# ================================
-# 为每个服务生成 keystore（含私钥）
-# ================================
-foreach ($service in $Services) {
-    Write-Host "? 生成 keystore: $service-keystore.p12"
-    openssl pkcs12 -export `
-        -in "$service.crt" `
-        -inkey "$service.key" `
-        -certfile ca.crt `
-        -out "$service-keystore.p12" `
-        -name $service `
-        -password pass:$KeystorePassword
-}
+    # Step 2: 创建 CSR
+    openssl req -new -key "$CertsDir/$key" -out "$CertsDir/$csr" -subj "/CN=$fqdn/O=DemoService"
 
-# ================================
-# 为每个服务生成 truststore（包含其它服务证书）
-# ================================
-foreach ($service in $Services) {
-    Write-Host "? 为 $service 生成 truststore"
-    $truststoreFile = "$service-truststore.p12"
-    if (Test-Path $truststoreFile) {
-        Remove-Item $truststoreFile
-    }
-
-    foreach ($other in $Services) {
-        if ($other -ne $service) {
-            keytool -importcert -noprompt `
-                -alias $other `
-                -file "$other.crt" `
-                -keystore $truststoreFile `
-                -storetype PKCS12 `
-                -storepass $TruststorePassword
-        }
-    }
-}
-
-Write-Host "? 所有服务证书、keystore、truststore 已生成。"
+    # Step 3: 使用 CA 签发证书
+    openssl x509 -req -in "$CertsDir/$csr" -CA "$CertsDir/$CACert" -CAkey "$Cert
