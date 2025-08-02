@@ -6,15 +6,39 @@ server:
     key-store-password: changeit
     key-store-type: PKCS12
     key-alias: user-service
-    trust-store: classpath:certs/user-service-truststore.p12
+    trust-store: classpath:certs/truststore.p12
     trust-store-password: changeit
     trust-store-type: PKCS12
 spring:
   application:
     name: user-service
 
+feign:
+  httpclient:
+    enabled: true  # 启用 Apache HttpClient（推荐）
+  client:
+    config:
+      default:
+        loggerLevel: full
+        connectTimeout: 5000
+        readTimeout: 10000
+        
+        # 让 Feign 使用 HTTPS
+        # 下面配置用于信任所有证书（仅开发环境），生产环境建议配置 truststore
+        # 若需自定义 SSL，需在代码中配置 Feign 的 Client bean
+
+# logging:
+#   level:
+#     root: DEBUG
+
 eureka:
   client:
     service-url:
-      defaultZone: https://eureka-server.demoapi.io:8761/eureka/
-      
+      defaultZone: http://eureka-server:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    secure-port-enabled: true
+    non-secure-port-enabled: false
+    # status-page-url: https://${eureka.instance.hostname}:${server.port}/actuator/info
+    # health-check-url: https://${eureka.instance.hostname}:${server.port}/actuator/health
+    # home-page-url: https://${eureka.instance.hostname}:${server.port}/      

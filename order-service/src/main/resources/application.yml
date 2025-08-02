@@ -1,18 +1,33 @@
 server:
   port: 8083
   ssl:
+    enabled: false
     key-store: classpath:certs/order-service-keystore.p12
     key-store-password: changeit
     key-store-type: PKCS12
     key-alias: order-service
-    trust-store: classpath:certs/order-service-truststore.p12
+    trust-store: classpath:certs/truststore.p12
     trust-store-password: changeit
     trust-store-type: PKCS12
 spring:
   application:
     name: order-service
 
+feign:
+  client:
+    config:
+      default:
+        loggerLevel: FULL
+
+logging:
+  level:
+    '[com.example.order]': DEBUG
+    '[feign]': DEBUG
+
 eureka:
   client:
+    # ip 优先
     service-url:
-      defaultZone: https://eureka-server.demoapi.io:8761/eureka/
+      defaultZone: https://eureka-server:8761/eureka/
+  instance:
+    prefer-ip-address: true

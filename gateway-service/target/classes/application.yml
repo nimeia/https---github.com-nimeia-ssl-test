@@ -1,11 +1,12 @@
 server:
   port: 8080
   ssl:
+    enabled: true
     key-store: classpath:certs/gateway-service-keystore.p12
     key-store-password: changeit
     key-store-type: PKCS12
     key-alias: gateway-service
-    trust-store: classpath:certs/gateway-service-truststore.p12
+    trust-store: classpath:certs/truststore.p12
     trust-store-password: changeit
     trust-store-type: PKCS12
     
@@ -17,15 +18,20 @@ spring:
     gateway:
       routes:
         - id: user-service
-          uri: https://user-service.demoapi.io:8081
+          uri: lb://user-service
           predicates:
             - Path=/user/**
+          filters:
+          - name: AddRequestHeader
+            args:
+              name: Host
+              value: user-service
         - id: order-service
-          uri: https://order-service.demoapi.io:8083
+          uri: lb://order-service
           predicates:
             - Path=/order/**
         - id: product-service
-          uri: https://product-service.demoapi.io:8082
+          uri: lb://product-service
           predicates:
             - Path=/product/**
     discovery:
@@ -34,4 +40,9 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: https://eureka-server.demoapi.io:8761/eureka/
+      defaultZone: http://eureka-server:8761/eureka/
+
+
+# logging:
+#   level:
+#     root: DEBUG

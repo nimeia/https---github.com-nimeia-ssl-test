@@ -39,20 +39,11 @@
         </dependencies>
     </dependencyManagement>
 
- 
-    <repository>
-        <id>spring</id>
-        <url>https://maven.aliyun.com/repository/spring</url>
-        <releases>
-            <enabled>true</enabled>
-        </releases>
-        <snapshots>
-            <enabled>true</enabled>
-        </snapshots>
-    </repository>
+
     
     <!-- 使用aliyun代理 -->
     <repositories>
+        
         <repository>
             <id>central</id>
             <name>aliyun maven</name>
@@ -65,6 +56,17 @@
             <!-- 是否开启快照版构件下载 -->
             <snapshots>
                 <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        
+        <repository>
+            <id>spring</id>
+            <url>https://maven.aliyun.com/repository/spring</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
             </snapshots>
         </repository>
     </repositories>

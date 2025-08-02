@@ -1,6 +1,7 @@
 server:
   port: 8082
   ssl:
+    enabled: false
     key-store: classpath:certs/product-service-keystore.p12
     key-store-password: changeit
     key-store-type: PKCS12
@@ -15,4 +16,4 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: https://eureka-server.demoapi.io:8761/eureka/
+      defaultZone: https://eureka-server:8761/eureka/
