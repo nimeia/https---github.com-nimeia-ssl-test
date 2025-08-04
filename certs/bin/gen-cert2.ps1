@@ -92,6 +92,7 @@ function Generate-CertForService {
     & $openssl pkcs12 -export `
         -in $crtFile `
         -inkey $keyFile `
+        -certfile $caCert `
         -out $p12File `
         -name "$serviceName" `
         -passout pass:$keystorePassword
