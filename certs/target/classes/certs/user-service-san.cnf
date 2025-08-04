@@ -1,0 +1,14 @@
+[ req ]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+[ req_distinguished_name ]
+[ v3_req ]
+subjectAltName = @alt_names
+[ alt_names ]
+DNS.1 = localhost
+DNS.2 = mydomain.com
+DNS.3 = *.mydomain.com
+IP.4 = 127.0.0.1
+IP.5 = 192.168.0.238
+IP.6 = 172.17.192.1
+

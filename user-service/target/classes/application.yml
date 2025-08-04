@@ -2,11 +2,11 @@ server:
   port: 8081
   ssl:
     enabled: true
-    key-store: classpath:certs/user/keystore.p12
+    key-store: classpath:certs/user-service.p12
     key-store-password: changeit
     key-store-type: PKCS12
-    key-alias: user-cert
-    trust-store: classpath:certs/user/truststore.p12
+    key-alias: user-service
+    trust-store: classpath:certs/truststore.p12
     trust-store-password: changeit
     trust-store-type: PKCS12
     
@@ -35,7 +35,7 @@ feign:
 eureka:
   client:
     service-url:
-      defaultZone: http://eureka-server:8761/eureka/
+      defaultZone: http://127.0.0.1:8761/eureka/
   instance:
     prefer-ip-address: true
     secure-port-enabled: true
