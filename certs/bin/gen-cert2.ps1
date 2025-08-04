@@ -126,18 +126,18 @@ function Create-Truststore {
         -noprompt
 
     # 导入每个服务证书链
-    $index = 1
-    foreach ($chain in $chainFiles) {
-        $alias = "svc-$index"
-        & $keytool -importcert `
-            -alias $alias `
-            -file $chain `
-            -keystore $truststoreFile `
-            -storepass $truststorePassword `
-            -storetype PKCS12 `
-            -noprompt
-        $index++
-    }
+    # $index = 1
+    # foreach ($chain in $chainFiles) {
+    #     $alias = "svc-$index"
+    #     & $keytool -importcert `
+    #         -alias $alias `
+    #         -file $chain `
+    #         -keystore $truststoreFile `
+    #         -storepass $truststorePassword `
+    #         -storetype PKCS12 `
+    #         -noprompt
+    #     $index++
+    # }
 
     Write-Host "? Truststore 构建完成: $truststoreFile"
 }
