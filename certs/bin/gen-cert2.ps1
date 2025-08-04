@@ -1,8 +1,5 @@
 # ================== 配置区域 ==================
 $caName = "MyCompany Root CA"
-$O ="MyCompany"
-$OU = "IT Department"
-$C = "CN"
 $caKey = "rootCA.key"
 $caCert = "rootCA.crt"
 $truststoreFile = "truststore.p12"
@@ -10,28 +7,29 @@ $truststorePassword = "changeit"
 
 $services = @("order-service", "gateway-service", "user-service", "product-service")
 $dnsNames = @("localhost", "mydomain.com", "*.mydomain.com")
-$ipAddresses = @("127.0.0.1", "192.168.0.238", "172.17.192.1")
+$ipAddresses = @("127.0.0.1", "172.16.3.163")
 
 $keystorePassword = "changeit"
 $validDays = 3650
 $openssl = "openssl"
+$keytool = "keytool"
 
 # 创建工作目录
-$workDir = "..\src\main\resources\certs"
+$workDir = "../src/main/resources/certs"
 New-Item -ItemType Directory -Force -Path $workDir | Out-Null
 Set-Location $workDir
 
 # ================== 函数：创建根 CA ==================
 function New-RootCA {
     if (!(Test-Path $caCert)) {
-        Write-Host "生成 Root CA..."
+        Write-Host "? 生成 Root CA..."
         & $openssl req -x509 -newkey rsa:4096 -nodes `
             -keyout $caKey `
             -out $caCert `
             -days $validDays `
-            -subj "/CN=$caName/O=$O/OU=$OU/C=$C" `
+            -subj "/CN=$caName"
     } else {
-        Write-Host "Root CA 已存在，跳过生成。"
+        Write-Host "? Root CA 已存在，跳过生成。"
     }
 }
 
@@ -65,30 +63,40 @@ $altNames
     return $sanFile
 }
 
-# ================== 函数：为服务生成证书 ==================
+# ================== 函数：为服务生成证书链和 keystore ==================
 function Generate-CertForService {
     param($serviceName)
 
-    Write-Host "生成证书: $serviceName"
+    Write-Host "? 生成证书: $serviceName"
 
     $keyFile = "$serviceName.key"
     $csrFile = "$serviceName.csr"
     $crtFile = "$serviceName.crt"
+    $chainFile = "$serviceName.chain.crt"
     $p12File = "$serviceName.p12"
     $sanFile = Create-SANConfig -serviceName $serviceName
 
+    # 生成 CSR + 私钥（注意 -reqexts v3_req）
     & $openssl req -newkey rsa:2048 -nodes `
         -keyout $keyFile `
         -out $csrFile `
-        -subj "/CN=$serviceName/O=$O/OU=$OU/C=$C" `
-        -config $sanFile
+        -subj "/CN=$serviceName" `
+        -config $sanFile `
+        -reqexts v3_req
 
+    # 使用 CA 签发证书
     & $openssl x509 -req -in $csrFile `
         -CA $caCert -CAkey $caKey -CAcreateserial `
         -out $crtFile `
         -days $validDays `
         -extensions v3_req -extfile $sanFile
 
+    # 生成 chain.crt（包含根 CA）
+    Set-Content $chainFile -Value (
+        (Get-Content $crtFile -Raw) + "`n" + (Get-Content $caCert -Raw)
+    )
+
+    # 创建包含证书链的 .p12 keystore
     & $openssl pkcs12 -export `
         -in $crtFile `
         -inkey $keyFile `
@@ -97,19 +105,19 @@ function Generate-CertForService {
         -name "$serviceName" `
         -passout pass:$keystorePassword
 
-    return (Resolve-Path $crtFile).Path
+    return (Resolve-Path $chainFile).Path
 }
 
-# ================== 函数：创建 Truststore ==================
+# ================== 函数：构建统一 truststore ==================
 function Create-Truststore {
-    param($certFiles)
+    param($chainFiles)
 
     if (Test-Path $truststoreFile) {
         Remove-Item $truststoreFile -Force
     }
 
-    # 把 root CA 加入 truststore
-    & keytool -importcert `
+    # 导入 Root CA
+    & $keytool -importcert `
         -alias root-ca `
         -file $caCert `
         -keystore $truststoreFile `
@@ -117,34 +125,37 @@ function Create-Truststore {
         -storetype PKCS12 `
         -noprompt
 
-    # 加入每个服务证书（可选）
+    # 导入每个服务证书链
     $index = 1
-    foreach ($cert in $certFiles) {
-        $alias = "service-$index"
-        & keytool -importcert `
+    foreach ($chain in $chainFiles) {
+        $alias = "svc-$index"
+        & $keytool -importcert `
             -alias $alias `
-            -file $cert `
+            -file $chain `
             -keystore $truststoreFile `
             -storepass $truststorePassword `
             -storetype PKCS12 `
             -noprompt
         $index++
     }
+
+    Write-Host "? Truststore 构建完成: $truststoreFile"
 }
 
-# ================== 主执行流程 ==================
+# ================== 主流程 ==================
 New-RootCA
 
-$certs = @()
+$chainFiles = @()
 foreach ($svc in $services) {
-    $cert = Generate-CertForService -serviceName $svc
-    if (Test-Path $cert) {
-        $certs += $cert
+    $chain = Generate-CertForService -serviceName $svc
+    if (Test-Path $chain) {
+        $chainFiles += $chain
     } else {
-        Write-Host "警告: 未找到服务 [$svc] 的证书: $cert"
+        Write-Host "?? 未生成证书链: $svc"
     }
 }
 
-Create-Truststore -certFiles $certs
+Create-Truststore -chainFiles $chainFiles
 
-Write-Host "? 所有证书与 truststore 已生成，位于目录: $workDir"
+Write-Host "`n? 全部证书生成完毕！"
+Write-Host "? 输出目录: $(Resolve-Path .)"

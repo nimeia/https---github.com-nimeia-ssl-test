@@ -22,7 +22,7 @@ public class UserController {
         return user;
     }
 
-    @GetMapping("/userorder/{id}")
+    @GetMapping("/user/order/{id}")
     public Map<String, Object> getUserOrder(@PathVariable("id") String id) {
         Map<String, Object> user = new HashMap<>();
         user.put("id", id);

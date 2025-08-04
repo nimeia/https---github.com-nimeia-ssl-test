@@ -21,11 +21,6 @@ spring:
           uri: lb://user-service
           predicates:
             - Path=/user/**
-          filters:
-          - name: AddRequestHeader
-            args:
-              name: Host
-              value: user-service
         - id: order-service
           uri: lb://order-service
           predicates:
